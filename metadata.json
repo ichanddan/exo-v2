@@ -1,0 +1,6 @@
+{
+  "name": "goSaving",
+  "description": "A beautiful modern fintech savings and transaction tracker with clean layouts, search, contact payments, and comprehensive history filtering.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
