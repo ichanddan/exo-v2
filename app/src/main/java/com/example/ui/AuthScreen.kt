@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,6 +44,7 @@ fun AuthScreen(
     var isSignUpMode by remember { mutableStateOf(false) }
     var emailInput by remember { mutableStateOf("") }
     var passwordInput by remember { mutableStateOf("") }
+    var fullNameInput by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
@@ -172,6 +174,31 @@ fun AuthScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
+                    // Full Name Field (Sign Up Only)
+                    AnimatedVisibility(visible = isSignUpMode) {
+                        OutlinedTextField(
+                            value = fullNameInput,
+                            onValueChange = { fullNameInput = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("auth_name_input"),
+                            label = { Text("Full Name") },
+                            placeholder = { Text("John Doe") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Person Symbol"
+                                )
+                            },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Text,
+                                imeAction = ImeAction.Next
+                            ),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+
                     // Email Field
                     OutlinedTextField(
                         value = emailInput,
@@ -250,7 +277,7 @@ fun AuthScreen(
                         onClick = {
                             focusManager.clearFocus()
                             if (isSignUpMode) {
-                                viewModel.performSignUp(emailInput, passwordInput, onAuthSuccess)
+                                viewModel.performSignUp(emailInput, passwordInput, fullNameInput, onAuthSuccess)
                             } else {
                                 viewModel.performSignIn(emailInput, passwordInput, onAuthSuccess)
                             }

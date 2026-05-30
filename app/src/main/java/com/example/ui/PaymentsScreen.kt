@@ -25,6 +25,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.example.Contact
 import com.example.FintechViewModel
 import kotlinx.coroutines.delay
 
@@ -35,6 +38,19 @@ fun PaymentsScreen(
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        viewModel.hasContactsPermission = isGranted
+        if (isGranted) {
+            viewModel.loadDeviceContacts()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadDeviceContacts()
+    }
 
     // Static data representing mockup designs
     val frequentContacts = listOf(
@@ -52,8 +68,14 @@ fun PaymentsScreen(
         Contact("Daniela Rose", "Daniela", "👩‍🎨", "d.rose@fintech.co")
     )
 
+    val contactsToUse = if (viewModel.hasContactsPermission && viewModel.deviceContacts.isNotEmpty()) {
+        viewModel.deviceContacts
+    } else {
+        allContacts
+    }
+
     // Filter contacts based on search query
-    val filteredAllContacts = allContacts.filter {
+    val filteredAllContacts = contactsToUse.filter {
         it.fullName.contains(searchQuery, ignoreCase = true) || 
         it.detailLabel.contains(searchQuery, ignoreCase = true)
     }
@@ -185,6 +207,85 @@ fun PaymentsScreen(
                 }
             }
 
+            // Contacts permission requester banner Banner
+            item {
+                if (!viewModel.hasContactsPermission) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                            .testTag("contacts_permission_banner")
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("📇", fontSize = 24.sp, modifier = Modifier.padding(end = 12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Sync Device Contacts",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        text = "Authorize goSaving to list and transfer test ledger transactions to actual phone contacts.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = {
+                                    permissionLauncher.launch(android.Manifest.permission.READ_CONTACTS)
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("grant_contacts_permission_btn")
+                            ) {
+                                Text("Grant Permission", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                } else if (viewModel.deviceContacts.isEmpty()) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.25f)
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                            .testTag("empty_contacts_banner")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("ℹ️", fontSize = 20.sp, modifier = Modifier.padding(end = 12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Permission Configured",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    text = "Read authorization is active, but your device phonebook has no contacts. Displaying fallback sandbox nodes below.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // 4. Vertical Contacts Directory List "All Contacts"
             item {
                 Column {
@@ -262,6 +363,7 @@ fun PaymentsScreen(
                 // Avatar Circular Box
                 val contactIcon = allContacts.firstOrNull { it.fullName == contactName }?.iconEmoji 
                     ?: frequentContacts.firstOrNull { it.fullName == contactName }?.iconEmoji 
+                    ?: viewModel.deviceContacts.firstOrNull { it.fullName == contactName }?.iconEmoji
                     ?: "👤"
 
                 Box(
@@ -482,10 +584,3 @@ fun ContactDirectoryRowItem(
         }
     }
 }
-
-data class Contact(
-    val fullName: String,
-    val shortName: String,
-    val iconEmoji: String,
-    val detailLabel: String
-)

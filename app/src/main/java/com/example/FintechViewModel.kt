@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import android.provider.ContactsContract
 import java.util.Calendar
 
 class FintechViewModel(application: Application) : AndroidViewModel(application) {
@@ -28,11 +30,16 @@ class FintechViewModel(application: Application) : AndroidViewModel(application)
     var isLoggedIn by mutableStateOf(false)
     var userEmail by mutableStateOf("")
     var userId by mutableStateOf("")
+    var userFullName by mutableStateOf("")
     var isAuthenticating by mutableStateOf(false)
     var authErrorMsg by mutableStateOf<String?>(null)
 
     // Sync notification states
     var inAppNotification by mutableStateOf<InAppNotificationAlert?>(null)
+
+    // Contacts state
+    var deviceContacts by mutableStateOf<List<Contact>>(emptyList())
+    var hasContactsPermission by mutableStateOf(false)
 
     data class InAppNotificationAlert(
         val title: String,
@@ -78,6 +85,8 @@ class FintechViewModel(application: Application) : AndroidViewModel(application)
             isLoggedIn = true
             userId = existingUid
             userEmail = existingEmail
+            val prefs = application.getSharedPreferences("go_saving_prefs", Context.MODE_PRIVATE)
+            userFullName = prefs.getString("fn_$existingUid", "") ?: ""
         }
 
         // Simple manual init for the repository using database singleton
@@ -92,6 +101,7 @@ class FintechViewModel(application: Application) : AndroidViewModel(application)
         if (isLoggedIn) {
             fetchAndSyncCloudTransactions()
         }
+        loadDeviceContacts()
     }
 
     fun triggerInAppNotification(title: String, message: String, amountStr: String, recipient: String) {
@@ -102,10 +112,11 @@ class FintechViewModel(application: Application) : AndroidViewModel(application)
         inAppNotification = null
     }
 
-    fun performSignUp(emailStr: String, passwordStr: String, onCompleted: () -> Unit) {
+    fun performSignUp(emailStr: String, passwordStr: String, fullNameStr: String, onCompleted: () -> Unit) {
         val email = emailStr.trim()
         val pwd = passwordStr.trim()
-        if (email.isEmpty() || pwd.isEmpty()) {
+        val fullName = fullNameStr.trim()
+        if (email.isEmpty() || pwd.isEmpty() || fullName.isEmpty()) {
             authErrorMsg = "Please populate all fields."
             return
         }
@@ -116,6 +127,11 @@ class FintechViewModel(application: Application) : AndroidViewModel(application)
             email = email,
             password = pwd,
             onSuccess = { uid, uEmail, isSimulated ->
+                // Apply update profile if firebase auth is enabled or just local cache
+                val prefs = getApplication<Application>().getSharedPreferences("go_saving_prefs", Context.MODE_PRIVATE)
+                prefs.edit().putString("fn_$uid", fullName).apply()
+                userFullName = fullName
+
                 isAuthenticating = false
                 isLoggedIn = true
                 userId = uid
@@ -144,6 +160,10 @@ class FintechViewModel(application: Application) : AndroidViewModel(application)
             email = email,
             password = pwd,
             onSuccess = { uid, uEmail, isSimulated ->
+                // Load full name from SharedPreferences
+                val prefs = getApplication<Application>().getSharedPreferences("go_saving_prefs", Context.MODE_PRIVATE)
+                userFullName = prefs.getString("fn_$uid", "") ?: ""
+
                 isAuthenticating = false
                 isLoggedIn = true
                 userId = uid
@@ -165,6 +185,7 @@ class FintechViewModel(application: Application) : AndroidViewModel(application)
             isLoggedIn = false
             userId = ""
             userEmail = ""
+            userFullName = ""
             clearAllData() // Clear database so new logger users start fresh
         }
     }
@@ -352,4 +373,65 @@ class FintechViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
+
+    fun loadDeviceContacts() {
+        viewModelScope.launch {
+            val list = mutableListOf<Contact>()
+            val context = getApplication<Application>()
+            val isGranted = android.content.pm.PackageManager.PERMISSION_GRANTED == 
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context, 
+                    android.Manifest.permission.READ_CONTACTS
+                )
+            hasContactsPermission = isGranted
+            Log.d("FintechViewModel", "loadDeviceContacts check: matches permission isGranted=$isGranted")
+            
+            if (isGranted) {
+                try {
+                    val contentResolver = context.contentResolver
+                    val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+                    val projection = arrayOf(
+                        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                        ContactsContract.CommonDataKinds.Phone.NUMBER
+                    )
+                    
+                    contentResolver.query(uri, projection, null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC")?.use { cursor ->
+                        val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                        val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                        val processedNames = mutableSetOf<String>()
+                        
+                        while (cursor.moveToNext()) {
+                            val name = if (nameIndex >= 0) cursor.getString(nameIndex) ?: "" else ""
+                            val number = if (numberIndex >= 0) cursor.getString(numberIndex) ?: "" else ""
+                            if (name.isNotEmpty() && number.isNotEmpty()) {
+                                if (!processedNames.contains(name)) {
+                                    processedNames.add(name)
+                                    val firstChar = name.firstOrNull()?.toString()?.uppercase() ?: "👤"
+                                    val icon = if (firstChar.first().isLetter()) firstChar else "👤"
+                                    list.add(
+                                        Contact(
+                                            fullName = name,
+                                            shortName = name.split(" ").firstOrNull() ?: name,
+                                            iconEmoji = icon,
+                                            detailLabel = number
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("FintechViewModel", "Error reading address book", e)
+                }
+            }
+            deviceContacts = list
+        }
+    }
 }
+
+data class Contact(
+    val fullName: String,
+    val shortName: String,
+    val iconEmoji: String,
+    val detailLabel: String
+)

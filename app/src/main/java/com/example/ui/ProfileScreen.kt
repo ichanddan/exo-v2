@@ -69,7 +69,11 @@ fun ProfileScreen(
                             .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        val initial = viewModel.userEmail.firstOrNull()?.uppercaseChar() ?: 'U'
+                        val initial = if (viewModel.userFullName.isNotEmpty()) {
+                            viewModel.userFullName.firstOrNull()?.uppercaseChar() ?: 'U'
+                        } else {
+                            viewModel.userEmail.firstOrNull()?.uppercaseChar() ?: 'U'
+                        }
                         Text(
                             text = initial.toString(),
                             fontSize = 36.sp,
@@ -81,11 +85,18 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = viewModel.userEmail,
+                        text = if (viewModel.userFullName.isNotEmpty()) viewModel.userFullName else viewModel.userEmail,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    if (viewModel.userFullName.isNotEmpty()) {
+                        Text(
+                            text = viewModel.userEmail,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Text(
                         text = "Ledger Synced Node Operator",
                         style = MaterialTheme.typography.bodySmall,

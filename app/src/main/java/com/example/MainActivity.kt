@@ -105,7 +105,7 @@ fun MainFintechAppScreen() {
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                // Profile Avatar showing dynamic Email Initial
+                                // Profile Avatar showing dynamic Email/Name Initial
                                 Box(
                                     modifier = Modifier
                                         .size(34.dp)
@@ -113,7 +113,11 @@ fun MainFintechAppScreen() {
                                         .background(MaterialTheme.colorScheme.primaryContainer),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    val initial = viewModel.userEmail.firstOrNull()?.uppercaseChar() ?: 'U'
+                                    val initial = if (viewModel.userFullName.isNotEmpty()) {
+                                        viewModel.userFullName.firstOrNull()?.uppercaseChar() ?: 'U'
+                                    } else {
+                                        viewModel.userEmail.firstOrNull()?.uppercaseChar() ?: 'U'
+                                    }
                                     Text(
                                         text = initial.toString(),
                                         fontSize = 14.sp,
@@ -124,7 +128,7 @@ fun MainFintechAppScreen() {
 
                                 Column {
                                     Text(
-                                        text = "goSaving Sync",
+                                        text = if (viewModel.userFullName.isNotEmpty()) viewModel.userFullName else "goSaving Sync",
                                         fontWeight = FontWeight.ExtraBold,
                                         fontSize = 15.sp,
                                         color = MaterialTheme.colorScheme.onSurface
